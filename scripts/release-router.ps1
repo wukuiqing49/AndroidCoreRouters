@@ -18,7 +18,9 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $repoRoot
 
 $versionFile = "version.properties"
+$versionsTomlFile = "gradle/libs.versions.toml"
 $groupId = "com.github.wukuiqing49"
+$jitpackGroupId = "com.github.wukuiqing49.AndroidCoreRouters"
 $githubRepository = "wukuiqing49/AndroidCoreRouters"
 $artifacts = @("core_router_api", "core_router_annotation", "core_router_processor")
 
@@ -107,9 +109,15 @@ Replace-InFile "README.md" {
     $content = $content -replace 'AndroidCoreRouters/v\d+\.\d+\.\d+', "AndroidCoreRouters/$tag"
     foreach ($artifact in $artifacts) {
         $content = $content -replace "com\.github\.wukuiqing49:$artifact:v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?", "$groupId`:$artifact`:$tag"
+        $content = $content -replace "com\.github\.wukuiqing49\.AndroidCoreRouters:$artifact:v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?", "$jitpackGroupId`:$artifact`:$tag"
     }
     $content = $content -replace 'POM_VERSION=v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?', "POM_VERSION=$tag"
     return $content
+}
+
+Replace-InFile $versionsTomlFile {
+    param($content)
+    return $content -replace 'androidCoreRouters = "v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?"', "androidCoreRouters = `"$tag`""
 }
 
 Run ".\gradlew.bat :app:assembleDebug publishRouterToMavenLocal `"-PPOM_GROUP_ID=$groupId`" `"-PPOM_VERSION=$tag`" `"-PGITHUB_REPOSITORY=$githubRepository`""
@@ -122,7 +130,7 @@ if (-not $statusAfter) {
 if ($AllowDirty) {
     Run "git add -A"
 } else {
-    Run "git add README.md version.properties build.gradle gradle/router-publish.gradle jitpack.yml scripts/release-router.ps1 .github/workflows/release-router.yml"
+    Run "git add README.md version.properties gradle/libs.versions.toml build.gradle gradle/router-publish.gradle jitpack.yml scripts/release-router.ps1 .github/workflows/release-router.yml"
     Run "git add core_router_annotation/build.gradle core_router_api/build.gradle core_router_processor/build.gradle"
 }
 Run "git commit -m `"release router $tag`""

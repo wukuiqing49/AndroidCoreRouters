@@ -75,6 +75,45 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           printf 'VERSION_NAME=%s\n' "$next" > "$version_file"
 
+      - name: Update release docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          tag = os.environ["TAG"]
+          artifacts = ["core_router_api", "core_router_annotation", "core_router_processor"]
+
+          readme = Path("README.md")
+          text = readme.read_text(encoding="utf-8")
+          text = re.sub(r"AndroidCoreRouters/v\d+\.\d+\.\d+", f"AndroidCoreRouters/{tag}", text)
+          for artifact in artifacts:
+              text = re.sub(
+                  rf"com\.github\.wukuiqing49:{artifact}:v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?",
+                  f"com.github.wukuiqing49:{artifact}:{tag}",
+                  text,
+              )
+              text = re.sub(
+                  rf"com\.github\.wukuiqing49\.AndroidCoreRouters:{artifact}:v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?",
+                  f"com.github.wukuiqing49.AndroidCoreRouters:{artifact}:{tag}",
+                  text,
+              )
+          text = re.sub(r"POM_VERSION=v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?", f"POM_VERSION={tag}", text)
+          readme.write_text(text, encoding="utf-8")
+
+          versions = Path("gradle/libs.versions.toml")
+          text = versions.read_text(encoding="utf-8")
+          text = re.sub(r'androidCoreRouters = "v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?"', f'androidCoreRouters = "{tag}"', text)
+          versions.write_text(text, encoding="utf-8")
+          PY
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+
       - name: Verify release build
         run: |
           ./gradlew :app:assembleDebug publishRouterToMavenLocal \
@@ -97,7 +136,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add version.properties
+          git add version.properties README.md gradle/libs.versions.toml
           git commit -m "release router ${{ steps.version.outputs.tag }}"
           git tag "${{ steps.version.outputs.tag }}"
           git push origin HEAD

@@ -38,8 +38,17 @@ ksp {
 }
 
 dependencies {
-    implementation project(":core_router_api")
-    ksp project(":core_router_processor")
+    def usePublishedRouter = providers.gradleProperty("usePublishedRouter")
+            .map { it.toBoolean() }
+            .getOrElse(false)
+
+    if (usePublishedRouter) {
+        implementation libs.android.core.router.api
+        ksp libs.android.core.router.processor
+    } else {
+        implementation project(":core_router_api")
+        ksp project(":core_router_processor")
+    }
 
     implementation libs.androidx.core.ktx
     implementation libs.androidx.appcompat
