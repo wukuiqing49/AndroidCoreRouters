@@ -2,6 +2,7 @@ package com.wkq.router.api
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +31,21 @@ class Postcard(val path: String) {
 
     fun withInt(key: String, value: Int): Postcard {
         extras.putInt(key, value)
+        return this
+    }
+
+    fun withShort(key: String, value: Short): Postcard {
+        extras.putShort(key, value)
+        return this
+    }
+
+    fun withByte(key: String, value: Byte): Postcard {
+        extras.putByte(key, value)
+        return this
+    }
+
+    fun withChar(key: String, value: Char): Postcard {
+        extras.putChar(key, value)
         return this
     }
 
@@ -68,8 +84,38 @@ class Postcard(val path: String) {
         return this
     }
 
+    fun withShortArray(key: String, value: ShortArray?): Postcard {
+        extras.putShortArray(key, value)
+        return this
+    }
+
+    fun withByteArray(key: String, value: ByteArray?): Postcard {
+        extras.putByteArray(key, value)
+        return this
+    }
+
+    fun withCharArray(key: String, value: CharArray?): Postcard {
+        extras.putCharArray(key, value)
+        return this
+    }
+
     fun withLongArray(key: String, value: LongArray?): Postcard {
         extras.putLongArray(key, value)
+        return this
+    }
+
+    fun withBooleanArray(key: String, value: BooleanArray?): Postcard {
+        extras.putBooleanArray(key, value)
+        return this
+    }
+
+    fun withFloatArray(key: String, value: FloatArray?): Postcard {
+        extras.putFloatArray(key, value)
+        return this
+    }
+
+    fun withDoubleArray(key: String, value: DoubleArray?): Postcard {
+        extras.putDoubleArray(key, value)
         return this
     }
 
@@ -111,6 +157,20 @@ class Postcard(val path: String) {
     fun getEnterAnim() = enterAnim
     fun getExitAnim() = exitAnim
     fun getFlags() = flags
+
+    companion object {
+        fun fromUri(uri: Uri): Postcard {
+            val routePath = uri.path.orEmpty().ifBlank {
+                val host = uri.host.orEmpty()
+                if (host.isBlank()) "" else "/$host"
+            }
+            return Postcard(routePath).apply {
+                uri.queryParameterNames.forEach { name ->
+                    withString(name, uri.getQueryParameter(name))
+                }
+            }
+        }
+    }
 }
 
 /**

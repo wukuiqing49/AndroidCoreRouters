@@ -37,7 +37,9 @@ tasks.register("publishRouterToMavenLocal") {
     dependsOn(
             ":core_router_annotation:publishReleasePublicationToMavenLocal",
             ":core_router_api:publishReleasePublicationToMavenLocal",
-            ":core_router_processor:publishReleasePublicationToMavenLocal"
+            ":core_router_processor:publishReleasePublicationToMavenLocal",
+            ":core_router_gradle_plugin:publishPluginMavenPublicationToMavenLocal",
+            ":core_router_gradle_plugin:publishWkqRouterPluginMarkerMavenPublicationToMavenLocal"
     )
 }
 
@@ -47,6 +49,127 @@ tasks.register("publishRouterToGitHubPackages") {
     dependsOn(
             ":core_router_annotation:publishReleasePublicationToGitHubPackagesRepository",
             ":core_router_api:publishReleasePublicationToGitHubPackagesRepository",
-            ":core_router_processor:publishReleasePublicationToGitHubPackagesRepository"
+            ":core_router_processor:publishReleasePublicationToGitHubPackagesRepository",
+            ":core_router_gradle_plugin:publishPluginMavenPublicationToGitHubPackagesRepository",
+            ":core_router_gradle_plugin:publishWkqRouterPluginMarkerMavenPublicationToGitHubPackagesRepository"
     )
+}
+
+tasks.register("verifyRouterReleaseMinifyService") {
+    group = "verification"
+    description = "Checks that the minified sample APK keeps router ServiceLoader metadata."
+    dependsOn(":app:assembleRelease")
+    def apkPath = layout.projectDirectory.file("app/build/outputs/apk/release/app-release-unsigned.apk").asFile.absolutePath
+    doLast {
+        def apk = new File(apkPath)
+        if (!apk.exists()) {
+            throw new GradleException("Release APK not found: ${apk}")
+        }
+
+        def servicePath = "META-INF/services/com.wkq.router.api.IRouteInit"
+        def expectedInitializers = [
+                "com.wkq.router.generated.RouteInit_demo",
+                "com.wkq.router.generated.RouteInit_feature_user",
+                "com.wkq.router.generated.RouteInit_feature_pay"
+        ]
+        def foundText = new java.util.zip.ZipFile(apk).withCloseable { zip ->
+            def entry = zip.getEntry(servicePath)
+            if (entry == null) {
+                return ""
+            }
+            return zip.getInputStream(entry).getText("UTF-8")
+        }
+        if (foundText.isBlank()) {
+            throw new GradleException("Router ServiceLoader metadata is missing from minified APK: ${servicePath}")
+        }
+        expectedInitializers.each { name ->
+            if (!foundText.contains(name)) {
+                throw new GradleException("Router initializer is missing from minified APK metadata: ${name}")
+            }
+        }
+    }
+}
+
+tasks.register("verifyRouterReleaseMinify") {
+    group = "verification"
+    description = "Builds the demo release APK with minify and validates router metadata."
+    dependsOn("verifyRouterReleaseMinifyService")
+}
+
+tasks.register("verifyRouterPublishedSample", Exec) {
+    group = "verification"
+    description = "Builds the sample app with published router artifacts enabled."
+    workingDir = rootDir
+    if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+        commandLine("cmd", "/c", "gradlew.bat", "--no-daemon", "--max-workers=1", "--no-configuration-cache", ":app:assembleDebug", "-PusePublishedRouter=true")
+    } else {
+        commandLine("./gradlew", "--no-daemon", "--max-workers=1", "--no-configuration-cache", ":app:assembleDebug", "-PusePublishedRouter=true")
+    }
+}
+
+tasks.register("verifyRouterMavenLocalSample", Exec) {
+    group = "verification"
+    description = "Builds the sample app against router artifacts from Maven Local."
+    workingDir = rootDir
+    def versionFile = layout.projectDirectory.file("version.properties").asFile
+    def versionName = "1.0.0"
+    if (versionFile.exists()) {
+        def props = new Properties()
+        versionFile.withInputStream { props.load(it) }
+        versionName = props.getProperty("VERSION_NAME", versionName)
+    }
+    def publishedVersion = versionName.startsWith("v") ? versionName : "v${versionName}"
+    if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+        commandLine(
+                "cmd",
+                "/c",
+                "gradlew.bat",
+                "--no-daemon",
+                "--max-workers=1",
+                "--no-configuration-cache",
+                "publishRouterToMavenLocal",
+                ":app:assembleDebug",
+                "-PusePublishedRouter=true",
+                "-PuseMavenLocalRouter=true",
+                "-PPOM_GROUP_ID=com.github.wukuiqing49.AndroidCoreRouters",
+                "-PPOM_VERSION=${publishedVersion}"
+        )
+    } else {
+        commandLine(
+                "./gradlew",
+                "--no-daemon",
+                "--max-workers=1",
+                "--no-configuration-cache",
+                "publishRouterToMavenLocal",
+                ":app:assembleDebug",
+                "-PusePublishedRouter=true",
+                "-PuseMavenLocalRouter=true",
+                "-PPOM_GROUP_ID=com.github.wukuiqing49.AndroidCoreRouters",
+                "-PPOM_VERSION=${publishedVersion}"
+        )
+    }
+}
+
+tasks.register("verifyRouterSample") {
+    group = "verification"
+    description = "Builds source, release-minified, and published-artifact sample variants."
+    dependsOn(
+            ":core_router_processor:test",
+            ":core_router_gradle_plugin:test",
+            ":app:assembleDebug",
+            "verifyRouterReleaseMinify",
+            "verifyRouterPublishedSample"
+    )
+}
+
+tasks.register("verifyRouterConnectedSmoke") {
+    group = "verification"
+    description = "Runs router smoke tests on a connected Android device or emulator."
+    dependsOn(":app:connectedDebugAndroidTest")
+}
+
+tasks.register("verifyRouterPublishLocal") {
+    group = "verification"
+    description = "Publishes router artifacts to Maven Local and builds the sample with published dependencies."
+    dependsOn("verifyRouterMavenLocalSample")
 }

@@ -5,7 +5,7 @@ package com.wkq.router.annotation
  *
  * @param name 参数名，不填时默认使用变量名
  */
-@Target(AnnotationTarget.FIELD)
+@Target(AnnotationTarget.PROPERTY, AnnotationTarget.FIELD)
 @Retention(AnnotationRetention.BINARY)
 annotation class Param(
     val name: String = ""

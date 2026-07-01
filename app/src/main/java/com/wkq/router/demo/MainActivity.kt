@@ -77,6 +77,37 @@ class MainActivity : AppCompatActivity() {
                     showMessage("ActivityResult: code=${result.resultCode}, data=$value")
                 }
         }
+        addAction(
+            iconRes = R.drawable.ic_md_route,
+            title = "URI / Deeplink",
+            route = "wkq://router/demo/second?name=UriDemo",
+            desc = "验证 Router.build(Uri) 解析 path 和 query 参数。"
+        ) {
+            navigateUriCompat("wkq://router/demo/second?name=UriDemo")
+        }
+
+        addSection("多模块路由")
+        addAction(
+            iconRes = R.drawable.ic_md_route,
+            title = "用户模块页面",
+            route = "/user/center",
+            desc = "验证 feature_user 独立模块生成并注册路由表。"
+        ) {
+            Router.build("/user/center")
+                .withString("userId", "U-10086")
+                .navigation(this)
+        }
+        addAction(
+            iconRes = R.drawable.ic_md_tune,
+            title = "支付模块页面",
+            route = "/pay/checkout",
+            desc = "验证 feature_pay 独立模块生成并注册路由表。"
+        ) {
+            Router.build("/pay/checkout")
+                .withString("orderId", "ORDER-20260701")
+                .withDouble("amount", 199.0)
+                .navigation(this)
+        }
 
         addSection("组件发现")
         addAction(
@@ -128,6 +159,16 @@ class MainActivity : AppCompatActivity() {
             desc = "验证路由不存在时的统一兜底处理。"
         ) {
             Router.navigate(this, "/missing/page")
+        }
+        addAction(
+            iconRes = R.drawable.ic_md_verified,
+            title = "路由组预加载",
+            route = "preload user/pay",
+            desc = "验证 Router.preloadGroup 提前加载多模块路由表。"
+        ) {
+            val userReady = preloadGroupCompat("user")
+            val payReady = preloadGroupCompat("pay")
+            showDialog("路由组预加载", "user=$userReady, pay=$payReady")
         }
         addAction(
             iconRes = R.drawable.ic_md_info,
@@ -293,6 +334,30 @@ class MainActivity : AppCompatActivity() {
             .setMessage(message)
             .setPositiveButton("知道了", null)
             .show()
+    }
+
+    private fun navigateUriCompat(uri: String) {
+        val method = Router::class.java.methods.firstOrNull {
+            it.name == "navigateUri" && it.parameterTypes.contentEquals(arrayOf(Context::class.java, String::class.java))
+        }
+        if (method != null) {
+            method.invoke(Router, this, uri)
+        } else {
+            Router.build("/demo/second")
+                .withString("name", "UriDemo")
+                .navigation(this)
+        }
+    }
+
+    private fun preloadGroupCompat(group: String): Boolean {
+        val method = Router::class.java.methods.firstOrNull {
+            it.name == "preloadGroup" && it.parameterTypes.contentEquals(arrayOf(String::class.java))
+        }
+        return if (method != null) {
+            method.invoke(Router, group) as? Boolean ?: false
+        } else {
+            false
+        }
     }
 
     private fun selectableItemBackground(): android.graphics.drawable.Drawable? {

@@ -9,6 +9,9 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        if (providers.gradleProperty("useMavenLocalRouter").map { it.toBoolean() }.getOrElse(false)) {
+            mavenLocal()
+        }
         maven { url = uri("https://jitpack.io") }
         google()
         mavenCentral()
@@ -21,3 +24,6 @@ include ':app'
 include ':core_router_annotation'
 include ':core_router_api'
 include ':core_router_processor'
+include ':core_router_gradle_plugin'
+include ':feature_user'
+include ':feature_pay'

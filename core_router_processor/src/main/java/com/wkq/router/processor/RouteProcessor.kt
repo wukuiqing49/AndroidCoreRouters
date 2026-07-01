@@ -7,13 +7,16 @@ import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.ksp.writeTo
 import java.io.OutputStreamWriter
@@ -35,14 +38,19 @@ class RouteProcessor(
         val interceptorName = "com.wkq.router.annotation.Interceptor"
         val paramName = "com.wkq.router.annotation.Param"
 
-        val routeSymbols = resolver.getSymbolsWithAnnotation(routeName)
-        val serviceSymbols = resolver.getSymbolsWithAnnotation(serviceName)
-        val interceptorSymbols = resolver.getSymbolsWithAnnotation(interceptorName)
-        val paramSymbols = resolver.getSymbolsWithAnnotation(paramName)
+        val routeSymbols = resolver.getSymbolsWithAnnotation(routeName).toList()
+        val serviceSymbols = resolver.getSymbolsWithAnnotation(serviceName).toList()
+        val interceptorSymbols = resolver.getSymbolsWithAnnotation(interceptorName).toList()
+        val paramSymbols = resolver.getSymbolsWithAnnotation(paramName).toList()
 
         val ret = (routeSymbols + serviceSymbols + interceptorSymbols + paramSymbols)
             .filter { !it.validate() }
             .toList()
+        if (ret.isNotEmpty()) {
+            return ret
+        }
+
+        validateAnnotationTargets(routeSymbols, serviceSymbols, interceptorSymbols, paramSymbols)
 
         val annotatedRoutes = routeSymbols.filterIsInstance<KSClassDeclaration>().toList()
         val annotatedServices = serviceSymbols.filterIsInstance<KSClassDeclaration>().toList()
@@ -61,13 +69,24 @@ class RouteProcessor(
         val moduleName = options["moduleName"]
         if (moduleName.isNullOrBlank() || moduleName == "Default") {
             logger.error(
-                "Router moduleName cannot be empty. Please configure " +
-                    "ksp { arg(\"moduleName\", \"YourModuleName\") } in the route module."
+                "AndroidCoreRouters: KSP option moduleName is required.\n" +
+                    "Add this to every module that uses router annotations:\n" +
+                    "ksp { arg(\"moduleName\", \"feature_user\") }"
+            )
+            return ret
+        }
+        if (!moduleName.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) {
+            logger.error(
+                "AndroidCoreRouters: moduleName must match [A-Za-z][A-Za-z0-9_]*, current value: $moduleName.\n" +
+                    "Example: ksp { arg(\"moduleName\", \"feature_user\") }"
             )
             return ret
         }
 
         validateRoutes(annotatedRoutes, routeName)
+        validateServices(resolver, annotatedServices, serviceName)
+        validateInterceptors(resolver, annotatedInterceptors)
+        validateParams(annotatedParams)
 
         val packageName = "com.wkq.router.generated"
         val className = "RouteInit_$moduleName"
@@ -75,6 +94,7 @@ class RouteProcessor(
         generateSyringeFiles(resolver, annotatedParams)
 
         val routeGroups = groupRoutes(annotatedRoutes, routeName)
+        generateRoutePathFile(resolver, packageName, moduleName, routeName, annotatedRoutes)
         generateRouteGroupFiles(resolver, packageName, moduleName, routeName, routeGroups)
         generateRouteInitFile(
             resolver = resolver,
@@ -204,7 +224,11 @@ class RouteProcessor(
                             finalKey
                         )
 
-                        else -> logger.warn("Unsupported @Param ArrayList element type: $elementTypeName for $paramName in $targetClassName")
+                        else -> logger.error(
+                            "AndroidCoreRouters: unsupported @Param ArrayList element type $elementTypeName for $paramName in $targetClassName. " +
+                                "Supported ArrayList element types: String, Int.",
+                            param
+                        )
                     }
                 }
                 "android.os.Bundle" -> addStatement("if (extras.containsKey(%S)) t.%L = extras.getBundle(%S)", finalKey, paramName, finalKey)
@@ -220,7 +244,11 @@ class RouteProcessor(
                             ClassName.bestGuess(typeName ?: "java.lang.Object")
                         )
                     } else {
-                        logger.warn("Unsupported @Param type: $typeName for $paramName in $targetClassName")
+                        logger.error(
+                            "AndroidCoreRouters: unsupported @Param type $typeName for $paramName in $targetClassName. " +
+                                "Supported types: primitives, primitive arrays, String, Array<String>, Bundle, Parcelable, Serializable, ArrayList<String>, ArrayList<Int>.",
+                            param
+                        )
                     }
                 }
             }
@@ -286,6 +314,49 @@ class RouteProcessor(
         }
     }
 
+    private fun generateRoutePathFile(
+        resolver: Resolver,
+        packageName: String,
+        moduleName: String,
+        routeName: String,
+        routes: List<KSClassDeclaration>
+    ) {
+        if (routes.isEmpty()) return
+
+        val constants = routes.mapNotNull { clazz ->
+            val annotation = clazz.annotations.find {
+                it.annotationType.resolve().declaration.qualifiedName?.asString() == routeName
+            }
+            val path = annotation?.arguments?.find { it.name?.asString() == "path" }?.value as? String
+            path?.let { it to toConstantName(it) }
+        }
+
+        if (constants.isEmpty()) return
+        constants.groupBy { it.second }
+            .filterValues { it.size > 1 }
+            .forEach { (name, values) ->
+                logger.error(
+                    "AndroidCoreRouters: generated route constant $name is duplicated by paths: " +
+                        values.joinToString { it.first }
+                )
+            }
+
+        val typeBuilder = TypeSpec.objectBuilder("RouterPaths_$moduleName")
+        constants.forEach { (path, name) ->
+            typeBuilder.addProperty(
+                PropertySpec.builder(name, String::class)
+                    .addModifiers(KModifier.CONST)
+                    .initializer("%S", path)
+                    .build()
+            )
+        }
+
+        FileSpec.builder(packageName, "RouterPaths_$moduleName")
+            .addType(typeBuilder.build())
+            .build()
+            .writeTo(codeGenerator, Dependencies(true, *resolver.getAllFiles().toList().toTypedArray()))
+    }
+
     private fun generateRouteInitFile(
         resolver: Resolver,
         packageName: String,
@@ -323,7 +394,7 @@ class RouteProcessor(
                                     if (apiClassName != null) {
                                         val implClassName = clazz.qualifiedName?.asString() ?: ""
                                         addStatement(
-                                            "com.wkq.router.api.RouteTable.registerService(%T::class.java, %T())",
+                                            "com.wkq.router.api.RouteTable.registerServiceProvider(%T::class.java) { %T() }",
                                             ClassName.bestGuess(apiClassName),
                                             ClassName.bestGuess(implClassName)
                                         )
@@ -364,18 +435,115 @@ class RouteProcessor(
                 return@forEach
             }
             if (!path.matches(Regex("^/[A-Za-z0-9_]+/[A-Za-z0-9_./-]+$"))) {
-                logger.error("@Route path must match /group/page format, current path: $path", clazz)
+                logger.error("AndroidCoreRouters: @Route path must match /group/page format, current path: $path", clazz)
+            }
+            if (clazz.qualifiedName == null) {
+                logger.error("AndroidCoreRouters: @Route target must be a named class.", clazz)
             }
             val existed = seenPaths[path]
             if (existed != null) {
                 logger.error(
-                    "Duplicate route path found: $path, already used by ${existed.qualifiedName?.asString()}",
+                    "AndroidCoreRouters: duplicate route path found: $path, already used by ${existed.qualifiedName?.asString()}",
                     clazz
                 )
             } else {
                 seenPaths[path] = clazz
             }
         }
+    }
+
+    private fun validateAnnotationTargets(
+        routeSymbols: List<KSAnnotated>,
+        serviceSymbols: List<KSAnnotated>,
+        interceptorSymbols: List<KSAnnotated>,
+        paramSymbols: List<KSAnnotated>
+    ) {
+        routeSymbols.filterNot { it is KSClassDeclaration }.forEach {
+            logger.error("AndroidCoreRouters: @Route can only be used on classes.", it)
+        }
+        serviceSymbols.filterNot { it is KSClassDeclaration }.forEach {
+            logger.error("AndroidCoreRouters: @ProvideService can only be used on classes.", it)
+        }
+        interceptorSymbols.filterNot { it is KSClassDeclaration }.forEach {
+            logger.error("AndroidCoreRouters: @Interceptor can only be used on classes.", it)
+        }
+        paramSymbols.filterNot { it is KSPropertyDeclaration }.forEach {
+            logger.error("AndroidCoreRouters: @Param can only be used on properties.", it)
+        }
+    }
+
+    private fun validateServices(
+        resolver: Resolver,
+        services: List<KSClassDeclaration>,
+        serviceName: String
+    ) {
+        services.forEach { clazz ->
+            val annotation = clazz.annotations.find {
+                it.annotationType.resolve().declaration.qualifiedName?.asString() == serviceName
+            }
+            val apiType = annotation?.arguments?.find { it.name?.asString() == "api" }?.value as? KSType
+            if (apiType == null) {
+                logger.error("AndroidCoreRouters: @ProvideService must declare api.", clazz)
+                return@forEach
+            }
+            if (!apiType.isAssignableFrom(clazz.asType(emptyList()))) {
+                logger.error(
+                    "AndroidCoreRouters: @ProvideService target ${clazz.qualifiedName?.asString()} must implement ${apiType.declaration.qualifiedName?.asString()}.",
+                    clazz
+                )
+            }
+            if (!hasPublicNoArgConstructor(clazz)) {
+                logger.error("AndroidCoreRouters: @ProvideService class must have a public no-arg constructor.", clazz)
+            }
+        }
+    }
+
+    private fun validateInterceptors(
+        resolver: Resolver,
+        interceptors: List<KSClassDeclaration>
+    ) {
+        val interceptorType = resolver
+            .getClassDeclarationByName(resolver.getKSNameFromString("com.wkq.router.api.IInterceptor"))
+            ?.asType(emptyList())
+        interceptors.forEach { clazz ->
+            if (interceptorType != null && !interceptorType.isAssignableFrom(clazz.asType(emptyList()))) {
+                logger.error("AndroidCoreRouters: @Interceptor class must implement IInterceptor.", clazz)
+            }
+            if (!hasPublicNoArgConstructor(clazz)) {
+                logger.error("AndroidCoreRouters: @Interceptor class must have a public no-arg constructor.", clazz)
+            }
+        }
+    }
+
+    private fun validateParams(params: List<KSPropertyDeclaration>) {
+        params.forEach { param ->
+            if (param.isMutable.not()) {
+                logger.error("AndroidCoreRouters: @Param field must be var or @JvmField mutable property.", param)
+            }
+            val parent = param.parentDeclaration
+            if (parent !is KSClassDeclaration) {
+                logger.error("AndroidCoreRouters: @Param can only be used in classes.", param)
+            }
+        }
+    }
+
+    private fun hasPublicNoArgConstructor(clazz: KSClassDeclaration): Boolean {
+        val constructors = clazz.declarations
+            .filterIsInstance<KSFunctionDeclaration>()
+            .filter { it.simpleName.asString() == "<init>" }
+            .toList()
+        return constructors.isEmpty() || constructors.any {
+            it.parameters.isEmpty() && Modifier.PRIVATE !in it.modifiers && Modifier.PROTECTED !in it.modifiers
+        }
+    }
+
+    private fun toConstantName(path: String): String {
+        val name = path.trim('/')
+            .replace(Regex("[^A-Za-z0-9]+"), "_")
+            .replace(Regex("([a-z])([A-Z])"), "$1_$2")
+            .uppercase()
+            .ifBlank { "ROOT" }
+        return if (name.first().isLetter() || name.first() == '_') name else "PATH_$name"
     }
 
     private fun generateServiceFile(packageName: String, className: String) {

@@ -9,6 +9,7 @@ object RouterConfig {
     var debug: Boolean = false
     var throwExceptionWhenRouteNotFound: Boolean = false
     var autoInitWhenNavigate: Boolean = true
+    var interceptorTimeoutMs: Long = 0L
     var logger: Logger = AndroidLogger()
     var globalDegradationService: IDegradationService? = null
 

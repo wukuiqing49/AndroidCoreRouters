@@ -22,7 +22,7 @@ $versionsTomlFile = "gradle/libs.versions.toml"
 $groupId = "com.github.wukuiqing49"
 $jitpackGroupId = "com.github.wukuiqing49.AndroidCoreRouters"
 $githubRepository = "wukuiqing49/AndroidCoreRouters"
-$artifacts = @("core_router_api", "core_router_annotation", "core_router_processor")
+$artifacts = @("core_router_api", "core_router_annotation", "core_router_processor", "core_router_gradle_plugin")
 
 function Get-VersionFromTag($tagName) {
     if ($tagName -match '^v?(\d+)\.(\d+)\.(\d+)$') {
@@ -120,7 +120,13 @@ Replace-InFile $versionsTomlFile {
     return $content -replace 'androidCoreRouters = "v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?"', "androidCoreRouters = `"$tag`""
 }
 
-Run ".\gradlew.bat :app:assembleDebug publishRouterToMavenLocal `"-PPOM_GROUP_ID=$groupId`" `"-PPOM_VERSION=$tag`" `"-PGITHUB_REPOSITORY=$githubRepository`""
+Replace-InFile "core_router_gradle_plugin/src/main/java/com/wkq/router/gradle/RouterGradlePlugin.kt" {
+    param($content)
+    return $content -replace '\.orElse\("v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?"\)', ".orElse(`"$tag`")"
+}
+
+Run ".\gradlew.bat --no-daemon --max-workers=1 --no-configuration-cache :core_router_processor:test :core_router_gradle_plugin:test :app:assembleDebug :app:assembleDebugAndroidTest verifyRouterReleaseMinify `"-PPOM_GROUP_ID=$groupId`" `"-PPOM_VERSION=$tag`" `"-PGITHUB_REPOSITORY=$githubRepository`""
+Run ".\gradlew.bat --no-daemon --max-workers=1 --no-configuration-cache publishRouterToMavenLocal :app:assembleDebug `"-PusePublishedRouter=true`" `"-PuseMavenLocalRouter=true`" `"-PPOM_GROUP_ID=$jitpackGroupId`" `"-PPOM_VERSION=$tag`" `"-PGITHUB_REPOSITORY=$githubRepository`""
 
 $statusAfter = git status --porcelain
 if (-not $statusAfter) {
@@ -130,8 +136,9 @@ if (-not $statusAfter) {
 if ($AllowDirty) {
     Run "git add -A"
 } else {
-    Run "git add README.md version.properties gradle/libs.versions.toml build.gradle gradle/router-publish.gradle jitpack.yml scripts/release-router.ps1 .github/workflows/release-router.yml"
-    Run "git add core_router_annotation/build.gradle core_router_api/build.gradle core_router_processor/build.gradle"
+    Run "git add README.md version.properties gradle/libs.versions.toml build.gradle gradle/router-publish.gradle jitpack.yml scripts/release-router.ps1 .github/workflows/release-router.yml .github/workflows/router-ci.yml"
+    Run "git add core_router_gradle_plugin"
+    Run "git add core_router_annotation/build.gradle core_router_api/build.gradle core_router_processor/build.gradle core_router_gradle_plugin/build.gradle"
 }
 Run "git commit -m `"release router $tag`""
 Run "git tag $tag"

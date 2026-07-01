@@ -1,0 +1,33 @@
+name: Router CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Run processor and Gradle plugin tests
+        run: ./gradlew --no-daemon --max-workers=1 --no-configuration-cache :core_router_processor:test :core_router_gradle_plugin:test
+
+      - name: Build source sample, android test APK, and release minify
+        run: ./gradlew --no-daemon --max-workers=1 --no-configuration-cache :app:assembleDebug :app:assembleDebugAndroidTest verifyRouterReleaseMinify
+
+      - name: Build sample with published router artifacts
+        run: ./gradlew --no-daemon --max-workers=1 --no-configuration-cache verifyRouterPublishedSample
+
+      - name: Verify Maven Local publication
+        run: ./gradlew --no-daemon --max-workers=1 --no-configuration-cache verifyRouterPublishLocal

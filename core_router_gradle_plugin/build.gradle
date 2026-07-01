@@ -1,0 +1,44 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+    id 'org.jetbrains.kotlin.jvm'
+    id 'java-gradle-plugin'
+    id 'maven-publish'
+}
+
+ext.POM_ARTIFACT_ID = "core_router_gradle_plugin"
+ext.POM_NAME = "core_router_gradle_plugin"
+ext.POM_DESCRIPTION = "Gradle plugin for AndroidCoreRouters auto configuration."
+
+dependencies {
+    implementation libs.kotlin.stdlib
+    implementation libs.kotlin.gradle.plugin
+    implementation libs.ksp.gradle.plugin
+
+    testImplementation libs.junit
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_17
+    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    withSourcesJar()
+}
+
+gradlePlugin {
+    plugins {
+        wkqRouter {
+            id = "com.wkq.router"
+            implementationClass = "com.wkq.router.gradle.RouterGradlePlugin"
+            displayName = "AndroidCoreRouters Gradle Plugin"
+            description = "Automatically configures AndroidCoreRouters API, KSP processor, and moduleName."
+        }
+    }
+}
+
+apply from: rootProject.file("gradle/router-publish.gradle")

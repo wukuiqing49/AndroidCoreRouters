@@ -87,7 +87,7 @@ jobs:
           import re
 
           tag = os.environ["TAG"]
-          artifacts = ["core_router_api", "core_router_annotation", "core_router_processor"]
+          artifacts = ["core_router_api", "core_router_annotation", "core_router_processor", "core_router_gradle_plugin"]
 
           readme = Path("README.md")
           text = readme.read_text(encoding="utf-8")
@@ -110,22 +110,36 @@ jobs:
           text = versions.read_text(encoding="utf-8")
           text = re.sub(r'androidCoreRouters = "v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?"', f'androidCoreRouters = "{tag}"', text)
           versions.write_text(text, encoding="utf-8")
+
+          plugin = Path("core_router_gradle_plugin/src/main/java/com/wkq/router/gradle/RouterGradlePlugin.kt")
+          text = plugin.read_text(encoding="utf-8")
+          text = re.sub(r'\.orElse\("v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+)?"\)', f'.orElse("{tag}")', text)
+          plugin.write_text(text, encoding="utf-8")
           PY
         env:
           TAG: ${{ steps.version.outputs.tag }}
 
       - name: Verify release build
         run: |
-          ./gradlew :app:assembleDebug publishRouterToMavenLocal \
+          ./gradlew --no-daemon --max-workers=1 --no-configuration-cache :core_router_processor:test :core_router_gradle_plugin:test :app:assembleDebug :app:assembleDebugAndroidTest verifyRouterReleaseMinify publishRouterToMavenLocal \
             -PPOM_GROUP_ID=com.github.wukuiqing49 \
             -PPOM_VERSION=${{ steps.version.outputs.tag }} \
             -PGITHUB_REPOSITORY=wukuiqing49/AndroidCoreRouters
+
+      - name: Verify Maven Local published sample
+        run: |
+          ./gradlew --no-daemon --max-workers=1 --no-configuration-cache publishRouterToMavenLocal :app:assembleDebug \
+            -PusePublishedRouter=true \
+            -PuseMavenLocalRouter=true \
+            -PPOM_GROUP_ID=com.github.wukuiqing49.AndroidCoreRouters \
+            -PGITHUB_REPOSITORY=wukuiqing49/AndroidCoreRouters \
+            -PPOM_VERSION=${{ steps.version.outputs.tag }}
 
       - name: Publish to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./gradlew publishRouterToGitHubPackages \
+          ./gradlew --no-daemon --max-workers=1 --no-configuration-cache publishRouterToGitHubPackages \
             -PPOM_GROUP_ID=com.github.wukuiqing49 \
             -PPOM_VERSION=${{ steps.version.outputs.tag }} \
             -PGITHUB_REPOSITORY=wukuiqing49/AndroidCoreRouters
@@ -136,7 +150,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add version.properties README.md gradle/libs.versions.toml
+          git add version.properties README.md gradle/libs.versions.toml core_router_gradle_plugin/src/main/java/com/wkq/router/gradle/RouterGradlePlugin.kt
           git commit -m "release router ${{ steps.version.outputs.tag }}"
           git tag "${{ steps.version.outputs.tag }}"
           git push origin HEAD

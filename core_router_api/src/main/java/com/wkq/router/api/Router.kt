@@ -3,12 +3,16 @@ package com.wkq.router.api
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.result.ActivityResult
 import androidx.fragment.app.FragmentActivity
 import java.util.ServiceLoader
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.KClass
 
 /**
@@ -33,6 +37,10 @@ object Router {
 
     fun setAutoInitWhenNavigate(enable: Boolean) {
         RouterConfig.autoInitWhenNavigate = enable
+    }
+
+    fun setInterceptorTimeout(timeoutMs: Long) {
+        RouterConfig.interceptorTimeoutMs = timeoutMs.coerceAtLeast(0L)
     }
 
     fun setDegradationService(service: IDegradationService?) {
@@ -106,8 +114,24 @@ object Router {
         return Postcard(path)
     }
 
+    fun build(uri: Uri): Postcard {
+        return Postcard.fromUri(uri)
+    }
+
+    fun buildUri(uri: String): Postcard {
+        return build(Uri.parse(uri))
+    }
+
     fun navigate(context: Context, path: String) {
         navigate(context, build(path))
+    }
+
+    fun navigate(context: Context, uri: Uri) {
+        navigate(context, build(uri))
+    }
+
+    fun navigateUri(context: Context, uri: String) {
+        navigate(context, buildUri(uri))
     }
 
     fun navigate(context: Context, postcard: Postcard) {
@@ -125,6 +149,26 @@ object Router {
             handleLost(context, p, t)
         }) { p ->
             realNavigate(context, p)
+        }
+    }
+
+    fun preload(path: String): Boolean {
+        ensureInitialized(appContext)
+        checkAndLoadGroup(path)
+        return RouteTable.routes[path] != null
+    }
+
+    fun preloadGroup(group: String): Boolean {
+        ensureInitialized(appContext)
+        val groupClass = RouteTable.groups[group] ?: return false
+        return try {
+            val groupInstance = groupClass.getConstructor().newInstance()
+            groupInstance.load()
+            RouteTable.groups.remove(group)
+            true
+        } catch (t: Throwable) {
+            RouterConfig.logger.e("Preload route group failed: $group", t)
+            false
         }
     }
 
@@ -183,13 +227,32 @@ object Router {
         }
 
         val interceptor = interceptors[index]
+        val completed = AtomicBoolean(false)
         try {
+            val timeoutMs = RouterConfig.interceptorTimeoutMs
+            val timeoutId = interceptorTimeoutId.incrementAndGet()
+            if (timeoutMs > 0L) {
+                mainHandler.postDelayed({
+                    if (completed.compareAndSet(false, true)) {
+                        onError(
+                            postcard,
+                            RouteInterruptedException(
+                                postcard.path,
+                                RouterException("Router interceptor timeout after ${timeoutMs}ms, id=$timeoutId")
+                            )
+                        )
+                    }
+                }, timeoutMs)
+            }
             interceptor.process(postcard, object : InterceptorCallback {
                 override fun onContinue(postcard: Postcard) {
-                    executeInterceptors(interceptors, index + 1, postcard, onError, finish)
+                    if (completed.compareAndSet(false, true)) {
+                        executeInterceptors(interceptors, index + 1, postcard, onError, finish)
+                    }
                 }
 
                 override fun onInterrupt(exception: Throwable?) {
+                    if (!completed.compareAndSet(false, true)) return
                     val routeException = RouteInterruptedException(postcard.path, exception)
                     exception?.let {
                         RouterConfig.logger.e("Router interrupted: ${postcard.path}", it)
@@ -199,7 +262,9 @@ object Router {
             })
         } catch (t: Throwable) {
             RouterConfig.logger.e("Router interceptor failed: ${postcard.path}", t)
-            onError(postcard, t)
+            if (completed.compareAndSet(false, true)) {
+                onError(postcard, t)
+            }
         }
     }
 
@@ -326,7 +391,8 @@ object Router {
 
     @Suppress("UNCHECKED_CAST")
     fun <T : Any> getService(api: KClass<T>): T? {
-        return RouteTable.services[api.java] as? T
+        ensureInitialized(appContext)
+        return RouteTable.getService(api.java) as? T
     }
 
     /**
@@ -389,4 +455,7 @@ object Router {
         syringeCache.clear()
         RouteTable.clear()
     }
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val interceptorTimeoutId = AtomicInteger(0)
 }

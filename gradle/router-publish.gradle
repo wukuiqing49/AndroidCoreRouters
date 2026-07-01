@@ -20,6 +20,9 @@ def githubRepository = providers.gradleProperty("GITHUB_REPOSITORY")
         .orElse(providers.environmentVariable("GITHUB_REPOSITORY"))
         .orElse("wukuiqing49/AndroidCoreRouters")
 
+group = publishedGroupId.get()
+version = publishedVersion.get()
+
 publishing {
     publications {
         release(MavenPublication) {

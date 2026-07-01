@@ -17,6 +17,7 @@ object RouteTable {
     val routes = ConcurrentHashMap<String, RouteMeta>()
     val groups = ConcurrentHashMap<String, Class<out IRouteGroup>>()
     val services = ConcurrentHashMap<Class<*>, Any>()
+    private val serviceProviders = ConcurrentHashMap<Class<*>, () -> Any>()
     val interceptors = CopyOnWriteArrayList<com.wkq.router.annotation.InterceptorMeta>()
 
     fun registerGroup(groupName: String, clazz: Class<out IRouteGroup>) {
@@ -31,6 +32,16 @@ object RouteTable {
         services[api] = impl
     }
 
+    fun registerServiceProvider(api: Class<*>, provider: () -> Any) {
+        serviceProviders[api] = provider
+    }
+
+    fun getService(api: Class<*>): Any? {
+        services[api]?.let { return it }
+        val provider = serviceProviders[api] ?: return null
+        return services.getOrPut(api) { provider() }
+    }
+
     fun registerInterceptor(priority: Int, interceptor: IInterceptor) {
         interceptors.add(com.wkq.router.annotation.InterceptorMeta(priority, interceptor))
     }
@@ -39,6 +50,7 @@ object RouteTable {
         routes.clear()
         groups.clear()
         services.clear()
+        serviceProviders.clear()
         interceptors.clear()
     }
 }

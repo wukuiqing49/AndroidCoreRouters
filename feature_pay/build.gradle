@@ -1,0 +1,45 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.ksp)
+}
+
+android {
+    namespace = "com.wkq.router.demo.pay"
+    compileSdk appConfig.compileSdk
+
+    defaultConfig {
+        minSdk appConfig.minSdk
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        compilerOptions {
+            jvmTarget = appConfig.jvmTarget
+        }
+    }
+}
+
+ksp {
+    arg("moduleName", "feature_pay")
+}
+
+dependencies {
+    def usePublishedRouter = providers.gradleProperty("usePublishedRouter")
+            .map { it.toBoolean() }
+            .getOrElse(false)
+
+    if (usePublishedRouter) {
+        implementation libs.android.core.router.api
+        ksp libs.android.core.router.processor
+    } else {
+        implementation project(":core_router_api")
+        ksp project(":core_router_processor")
+    }
+
+    implementation libs.androidx.appcompat
+}

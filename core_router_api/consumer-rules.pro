@@ -7,7 +7,6 @@
 
 # Keep generated route bootstrap classes.
 -keep class com.wkq.router.generated.** { *; }
--keepresourcefiles META-INF/services/com.wkq.router.api.IRouteInit
 
 # @Param injection uses targetClassName + "_Syringe" to find the generated injector.
 # Keep target class names when they contain @Param fields, otherwise R8 may rename
