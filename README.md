@@ -162,7 +162,7 @@ ksp "com.github.wukuiqing49:core_router_processor:v1.0.0"
 
 ```properties
 POM_GROUP_ID=com.your.company
-POM_VERSION=v1.0.0
+POM_VERSION=v1.0.1
 GITHUB_REPOSITORY=owner/repository
 ```
 
@@ -178,6 +178,12 @@ GITHUB_REPOSITORY=owner/repository
 
 ```powershell
 .\scripts\release-router.ps1 -Bump patch
+```
+
+如果当前工作区存在尚未提交、但确认要一起进入本次发版的改动，可以加 `-AllowDirty`：
+
+```powershell
+.\scripts\release-router.ps1 -Bump patch -AllowDirty
 ```
 
 脚本会更新 `version.properties`，验证 `:app:assembleDebug`，统一发布三个 artifact 到 Maven Local，创建发版提交，并创建 `vX.Y.Z` tag。
