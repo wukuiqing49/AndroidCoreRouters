@@ -1,0 +1,8 @@
+<resources>
+    <color name="demo_bg">#F8FAFC</color>
+    <color name="demo_surface">#FFFFFF</color>
+    <color name="demo_text_primary">#0F172A</color>
+    <color name="demo_text_secondary">#475569</color>
+    <color name="demo_primary">#0F766E</color>
+    <color name="demo_secondary">#C2410C</color>
+</resources>

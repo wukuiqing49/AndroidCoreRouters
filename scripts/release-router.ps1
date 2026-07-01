@@ -119,8 +119,12 @@ if (-not $statusAfter) {
     throw "No changes to release."
 }
 
-Run "git add README.md version.properties build.gradle gradle/router-publish.gradle jitpack.yml scripts/release-router.ps1 .github/workflows/release-router.yml"
-Run "git add core_router_annotation/build.gradle core_router_api/build.gradle core_router_processor/build.gradle"
+if ($AllowDirty) {
+    Run "git add -A"
+} else {
+    Run "git add README.md version.properties build.gradle gradle/router-publish.gradle jitpack.yml scripts/release-router.ps1 .github/workflows/release-router.yml"
+    Run "git add core_router_annotation/build.gradle core_router_api/build.gradle core_router_processor/build.gradle"
+}
 Run "git commit -m `"release router $tag`""
 Run "git tag $tag"
 

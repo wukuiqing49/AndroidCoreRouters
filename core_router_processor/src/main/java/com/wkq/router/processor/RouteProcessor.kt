@@ -184,6 +184,29 @@ class RouteProcessor(
                 "kotlin.ByteArray" -> addStatement("if (extras.containsKey(%S)) t.%L = extras.getByteArray(%S)", finalKey, paramName, finalKey)
                 "kotlin.ShortArray" -> addStatement("if (extras.containsKey(%S)) t.%L = extras.getShortArray(%S)", finalKey, paramName, finalKey)
                 "kotlin.CharArray" -> addStatement("if (extras.containsKey(%S)) t.%L = extras.getCharArray(%S)", finalKey, paramName, finalKey)
+                "kotlin.collections.ArrayList", "java.util.ArrayList" -> {
+                    val elementTypeName = type.arguments.firstOrNull()?.type?.resolve()
+                        ?.declaration
+                        ?.qualifiedName
+                        ?.asString()
+                    when (elementTypeName) {
+                        "kotlin.String", "java.lang.String" -> addStatement(
+                            "if (extras.containsKey(%S)) t.%L = extras.getStringArrayList(%S)",
+                            finalKey,
+                            paramName,
+                            finalKey
+                        )
+
+                        "kotlin.Int", "java.lang.Integer" -> addStatement(
+                            "if (extras.containsKey(%S)) t.%L = extras.getIntegerArrayList(%S)",
+                            finalKey,
+                            paramName,
+                            finalKey
+                        )
+
+                        else -> logger.warn("Unsupported @Param ArrayList element type: $elementTypeName for $paramName in $targetClassName")
+                    }
+                }
                 "android.os.Bundle" -> addStatement("if (extras.containsKey(%S)) t.%L = extras.getBundle(%S)", finalKey, paramName, finalKey)
                 else -> {
                     if (parcelableType != null && parcelableType.isAssignableFrom(type)) {

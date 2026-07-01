@@ -7,6 +7,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RouterDemo">
         <activity
+            android:name=".ResultActivity"
+            android:exported="false" />
+        <activity
+            android:name=".InterceptedActivity"
+            android:exported="false" />
+        <activity
             android:name=".SecondActivity"
             android:exported="false" />
         <activity
