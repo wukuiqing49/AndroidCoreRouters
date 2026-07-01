@@ -162,7 +162,7 @@ ksp "com.github.wukuiqing49:core_router_processor:v1.0.0"
 
 ```properties
 POM_GROUP_ID=com.your.company
-POM_VERSION=v1.0.2
+POM_VERSION=v1.0.3
 GITHUB_REPOSITORY=owner/repository
 ```
 
