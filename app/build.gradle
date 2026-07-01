@@ -1,0 +1,52 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.ksp)
+}
+
+android {
+    namespace = appConfig.appNamespace
+    compileSdk appConfig.compileSdk
+
+    defaultConfig {
+        applicationId appConfig.appNamespace
+        minSdk appConfig.minSdk
+        targetSdk appConfig.targetSdk
+        versionCode appConfig.versionCode
+        versionName appConfig.versionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    kotlin {
+        compilerOptions {
+            jvmTarget = appConfig.jvmTarget
+        }
+    }
+}
+
+ksp {
+    arg("moduleName", "demo")
+}
+
+dependencies {
+    implementation project(":core_router_api")
+    ksp project(":core_router_processor")
+
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.appcompat
+    implementation libs.androidx.activity.ktx
+    implementation libs.androidx.constraintlayout
+
+    testImplementation libs.junit
+    androidTestImplementation libs.androidx.junit
+    androidTestImplementation libs.androidx.espresso.core
+}

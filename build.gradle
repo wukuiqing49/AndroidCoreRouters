@@ -1,0 +1,52 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.ksp) apply false
+}
+
+subprojects {
+    configurations.configureEach {
+        resolutionStrategy {
+            force "org.jetbrains.kotlin:kotlin-stdlib:${libs.versions.kotlin.get()}"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${libs.versions.kotlin.get()}"
+            force "org.jetbrains.kotlin:kotlin-reflect:${libs.versions.kotlin.get()}"
+        }
+    }
+}
+
+ext {
+    appVersionCode = 1001
+    appConfig = [
+            appNamespace : "com.wkq.router.demo",
+            compileSdk   : 36,
+            minSdk       : 24,
+            targetSdk    : 36,
+            versionCode  : appVersionCode,
+            versionName  : appVersionCode.toString().toCharArray().join("."),
+            jvmTarget    : JvmTarget.JVM_17
+    ]
+}
+
+tasks.register("publishRouterToMavenLocal") {
+    group = "publishing"
+    description = "Publishes all router artifacts to Maven Local with one shared version."
+    dependsOn(
+            ":core_router_annotation:publishReleasePublicationToMavenLocal",
+            ":core_router_api:publishReleasePublicationToMavenLocal",
+            ":core_router_processor:publishReleasePublicationToMavenLocal"
+    )
+}
+
+tasks.register("publishRouterToGitHubPackages") {
+    group = "publishing"
+    description = "Publishes all router artifacts to GitHub Packages with one shared version."
+    dependsOn(
+            ":core_router_annotation:publishReleasePublicationToGitHubPackagesRepository",
+            ":core_router_api:publishReleasePublicationToGitHubPackagesRepository",
+            ":core_router_processor:publishReleasePublicationToGitHubPackagesRepository"
+    )
+}
