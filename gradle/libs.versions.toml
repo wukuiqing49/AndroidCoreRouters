@@ -14,7 +14,7 @@ coroutines = "1.10.2"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
-androidCoreRouters = "v1.0.2"
+androidCoreRouters = "v1.0.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

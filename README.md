@@ -183,7 +183,7 @@ ksp "com.github.wukuiqing49.AndroidCoreRouters:core_router_processor:v1.0.2"
 
 ```properties
 POM_GROUP_ID=com.your.company
-POM_VERSION=v1.0.3
+POM_VERSION=v1.0.4
 GITHUB_REPOSITORY=owner/repository
 ```
 
